@@ -1,0 +1,78 @@
+venv
+__pycache__/
+env
+.env
+node_modules
+
+# Arquivos e pastas do Node.js (Frontend)
+# -------------------------------------
+# Ignora a pasta de dependências do Node.js
+/frontend/node_modules
+
+# Ignora o cache do build do Vite
+/frontend/.vite
+
+# Arquivos de ambiente locais do frontend
+# Para evitar o commit de chaves de API, senhas, etc.
+/frontend/.env.local
+/frontend/.env.*.local
+/frontend/.env
+
+# Arquivos de build do frontend
+/frontend/dist
+/frontend/build
+
+# Logs
+/frontend/npm-debug.log*
+
+# Arquivos de lock duplicados que podem ser gerados
+/frontend/package-lock.json
+
+# -------------------------------------
+
+
+# Arquivos e pastas do Python (Backend)
+# ------------------------------------
+# Ignora o ambiente virtual do Python
+/backend/venv
+
+# Arquivos de ambiente locais do backend
+/backend/.env
+
+# Arquivos de cache do Python
+__pycache__/
+*.py[co]
+.Python
+*.$py.class
+
+# Arquivos de migração específicos, se houver
+# Se você estiver usando o Django, por exemplo, o diretório migrations
+/backend/app/migrations
+
+# ------------------------------------
+
+
+# Arquivos e pastas gerais do projeto
+# ------------------------------------
+# Ignora a pasta de uploads de arquivos
+/backend/app/uploads/
+/frontend/uploads/
+/uploads/
+
+# Arquivos de cache do editor (VS Code, etc)
+.vscode/
+
+# Logs em geral
+*.log
+
+# Arquivos de configuração do Docker
+# Geralmente o docker-compose.yml pode ser versionado,
+# mas se tiver variações locais, é bom ignorar
+docker-compose.yml.local
+
+# Anotações, se não forem parte do código fonte
+/anotações
+
+# Arquivos de cache de sistema operacional
+.DS_Store
+Thumbs.db
