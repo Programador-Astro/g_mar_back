@@ -4,7 +4,6 @@ from flask import request, jsonify
 from flask_login import login_user, logout_user, current_user
 from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required, get_jwt, get_jti
 from app import db
-from app.utils import gerar_token, decodificar_token
 from app.models import *
 
 
@@ -16,7 +15,7 @@ def root():
         return 'USER NOT FOUND', 404
     if not check_password_hash(usuario.pwd, data['pwd']):
         return 'INVALID PASSWORD', 401
-    access_token = create_access_token(identity=data['email'])
+    access_token = create_access_token(identity=data['email'], additional_claims={"perfil": usuario.perfil.nome, "id": usuario.id})
     usuario.jwt = access_token
     usuario.jwt_iat = get_jti(access_token)
    
