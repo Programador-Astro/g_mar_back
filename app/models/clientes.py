@@ -45,24 +45,23 @@ class Endereco_Motorista(db.Model):
 
 class Pedido(db.Model):
     __tablename__ = 'pedidos'
-
     id = db.Column(db.Integer, primary_key=True)
     cod_externo = db.Column(db.String(50), unique=True, nullable=False)
     cliente_id = db.Column(db.Integer, db.ForeignKey('clientes.id'), nullable=False)
     status = db.Column(db.String(50), nullable=False)
     data_criacao = db.Column(db.DateTime, nullable=False)
     data_entrega = db.Column(db.DateTime, nullable=True, default=None)
-    
+
     endereco_adm_id = db.Column(db.Integer, db.ForeignKey('enderecos_adm.id'), nullable=False)
     endereco_motorista_id = db.Column(db.Integer, db.ForeignKey('enderecos_motoristas.id'), nullable=True)
     motorista_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
-  
 
-    produtos = db.relationship('Produto_Pedido', backref='pedidos', lazy=True)
     cliente = db.relationship('Cliente', backref='pedidos')
     endereco_adm = db.relationship('Endereco_Adm', backref='pedidos')
-    endereco_motorista = db.relationship('Endereco_Motorista', backref='pedidos') 
+    endereco_motorista = db.relationship('Endereco_Motorista', backref='pedidos')
     motorista = db.relationship('Usuario', backref='pedidos', lazy=True)
+
+    produtos = db.relationship('Produto_Pedido', backref='pedido', lazy=True)
 
 class Produto_Pedido(db.Model):
     __tablename__ = 'produtos_pedidos'
@@ -70,11 +69,9 @@ class Produto_Pedido(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     pedido_id = db.Column(db.Integer, db.ForeignKey('pedidos.id'), nullable=False)
     produto_id = db.Column(db.Integer, db.ForeignKey('produtos.id'), nullable=False)
-    #cod_externo = db.Column(db.String(50), nullable=False)
     quantidade = db.Column(db.Float, nullable=False)
 
-    pedido = db.relationship('Pedido', backref='produtos_pedidos')
-    produto = db.relationship('Produto', backref='pedidos')
+    produto = db.relationship('Produto', backref='produtos_pedidos')
 
 
 class Produto(db.Model):

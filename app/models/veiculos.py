@@ -36,7 +36,7 @@ class Checklist(db.Model):
     combustivel = db.Column(db.Float, nullable=False)
     data = db.Column(db.DateTime, default=db.func.current_timestamp(), nullable=False)
     autor = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-
+    obs =  db.Column(db.String(300), nullable=True)
     src_ft_frontal  = db.Column(db.String(200), nullable=True)
     src_ft_lateral1 = db.Column(db.String(200), nullable=True)
     src_ft_lateral2 = db.Column(db.String(200), nullable=True)

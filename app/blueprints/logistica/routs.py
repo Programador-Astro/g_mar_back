@@ -7,8 +7,8 @@ from app import db
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash
 from app.utils import limpar_pdf_pedido, geocodificar_google, get_agora
-
 import os
+
 
 UPLOAD_FOLDER = os.path.join(os.getcwd(), 'app', 'static', 'uploads')
 
@@ -60,56 +60,63 @@ def veiculos():
     return jsonify(veiculos_list), 200
 
 
-@logistica_bp.route('/checklist/<placa>', methods=['GET', 'POST'])
+@logistica_bp.route('/checklist/<placa>', methods=['POST', 'GET'])
 @jwt_required()
 def checklist(placa):
-
+    veiculo = Veiculos.query.filter_by(placa=placa).first()
+    if not veiculo:
+        return jsonify({"error": "Veículo não encontrado"}), 404
     if request.method == 'POST':
+        new_checklist = Checklist(
+            placa=veiculo.placa,
+            km=int(request.form.get('km')),
+            temperatura=float(request.form.get('temperatura')),
+            combustivel=float(request.form.get('combustivel')),
+            obs=request.form.get('observacoes', ""),  # novo campo
+            autor=1  # substituir pelo usuário autenticado
+        )
 
+        db.session.add(new_checklist)
+        db.session.flush()
 
-        veiculo = Veiculos.query.filter_by(placa=placa).first()
-        if veiculo:
-            # 1. Criando a instância do Checklist, mas sem os caminhos das fotos ainda (Vou fazer isso iterando e verificando)
+        checklist_id = new_checklist.id
+        fotos_salvas = {}
 
-            new_checklist = Checklist(
-                placa=veiculo.placa, # Use o ID do veículo, não a placa. A sua tabela Checklist usa 'veiculo_id'
-                km=int(request.form.get('km')),
-                temperatura=float(request.form.get('temperatura')),
-                combustivel=float(request.form.get('combustivel')),
-                autor=int(1)  # Use o ID do usuário autenticado,
-                
-            )
+        # Pasta do checklist
+        pasta_checklist = os.path.join(UPLOAD_FOLDER, str(checklist_id))
+        pasta_extras = os.path.join(pasta_checklist, "extras")
+        os.makedirs(pasta_checklist, exist_ok=True)
+        os.makedirs(pasta_extras, exist_ok=True)
 
-            db.session.add(new_checklist)
-            db.session.flush()
+        # Fotos padrão
+        for campo in ["fotoFrontal", "fotoTraseira", "fotoLateral1", "fotoLateral2"]:
+            arquivo = request.files.get(campo)
+            if arquivo and arquivo.filename:
+                ext = os.path.splitext(secure_filename(arquivo.filename))[1]
+                filename = f"{campo}{ext}"
+                filepath = os.path.join(pasta_checklist, filename)
+                arquivo.save(filepath)
 
-            placa = veiculo.placa
-            fotos_salvas = {}
-            # 2. Iterando sobre os arquivos enviados e salvando-os
-            for campo in ["fotoFrontal", "fotoTraseira", "fotoLateral1", "fotoLateral2"]:
-                arquivo = request.files.get(campo)
-                if arquivo and arquivo.filename:
-                    ext = os.path.splitext(secure_filename(arquivo.filename))[1]
-                    filename = f"{new_checklist.id}_{placa}_{campo}{ext}"
-                    filepath = os.path.join(UPLOAD_FOLDER, filename)
-                    arquivo.save(filepath)
-                    
-                    # 3. Atualizando o objeto new_checklist com os caminhos dos arquivos
-                    #    Mapeando os campos
-                    if campo == "fotoFrontal":
-                        new_checklist.src_ft_frontal = filepath
-                    elif campo == "fotoTraseira":
-                        new_checklist.src_ft_traseira = filepath
-                    elif campo == "fotoLateral1":
-                        new_checklist.src_ft_lateral1 = filepath
-                    elif campo == "fotoLateral2":
-                        new_checklist.src_ft_lateral2 = filepath
+                if campo == "fotoFrontal":
+                    new_checklist.src_ft_frontal = filepath
+                elif campo == "fotoTraseira":
+                    new_checklist.src_ft_traseira = filepath
+                elif campo == "fotoLateral1":
+                    new_checklist.src_ft_lateral1 = filepath
+                elif campo == "fotoLateral2":
+                    new_checklist.src_ft_lateral2 = filepath
 
-            # 4. Finalizar e Salvar
-            db.session.commit()
+        # Fotos adicionais (não salvamos no banco, só no diretório)
+        for key, arquivo in request.files.items():
+            if key.startswith("fotoAdicional_") and arquivo and arquivo.filename:
+                ext = os.path.splitext(secure_filename(arquivo.filename))[1]
+                filename = f"{key}{ext}"
+                filepath = os.path.join(pasta_extras, filename)
+                arquivo.save(filepath)
 
-            return jsonify({"msg": "Checklist adicionado com sucesso"}), 201
-            
+        db.session.commit()
+
+        return jsonify({"msg": "Checklist adicionado com sucesso", "id": checklist_id}), 201
 
     # Se for um GET, retorna a lista de checklists
     checklists = Checklist.query.all()
@@ -136,16 +143,27 @@ def get_img(id):
         return jsonify({"msg": "Checklist not found"}), 404
 
     fotos = []
+    fotos_extras = []
+    # 1) Fotos padrão do checklist (vindas das colunas src_ft_*)
     for coluna, valor in checklist.__dict__.items():
         if coluna.startswith('src_ft_') and valor:
-            # Pega o nome do arquivo (ex.: 12_SYA1I92_fotoFrontal.png)
             filename = os.path.basename(valor)
-            # Monta a URL usando Flask (pasta static/uploads)
-            file_url = url_for('static', filename=f'uploads/{filename}', _external=False)
+            file_url = url_for('static', filename=f'uploads/{id}/{filename}', _external=False)
             fotos.append({
                 "nome": coluna.replace("src_ft_", ""),
                 "url": file_url
             })
+
+    # 2) Fotos adicionais na pasta extras
+    extras_dir = os.path.join("app", "static", "uploads", str(id), "extras")
+    if os.path.exists(extras_dir):
+        for file in os.listdir(extras_dir):
+            if file.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp")):
+                file_url = url_for('static', filename=f'uploads/{id}/extras/{file}', _external=False)
+                fotos_extras.append({
+                    "nome": f"extra_{file}",
+                    "url": file_url
+                })
 
     return jsonify({
         "id": checklist.id,
@@ -153,7 +171,8 @@ def get_img(id):
         "km": checklist.km,
         "temperatura": checklist.temperatura,
         "combustivel": checklist.combustivel,
-        "fotos": fotos
+        "fotos": fotos,
+        "fotos_extras": fotos_extras
     }), 200
 
 
@@ -248,7 +267,7 @@ def get_cliente(codigo_cliente):
                     "nome": pp.produto.nome,
                     "quantidade": pp.quantidade
                 }
-                for pp in pedido.produtos_pedidos
+                for pp in pedido.produtos
             ]
         })
 
@@ -480,10 +499,6 @@ def cadastrar_endeco_motorista():
     if request.method == 'PUT':
         pass
 
-@logistica_bp.route('/teste')
-def teste():
-    g = geocodificar_google("Av. Pauslista, 1000, São Paulo, SP")
-    return jsonify(g), 200
 
 @logistica_bp.route('/cadastrar')
 @jwt_required()

@@ -9,7 +9,7 @@ def create_app():
     app.config.from_object(get_config())
     jwt.init_app(app)
     migrate.init_app(app, db)
-    cors.init_app(app, origins=["http://localhost:5173", "https://gestor-docker-1.onrender.com", "https://gestor-docker.onrender.com"], supports_credentials=True)
+    cors.init_app(app,  supports_credentials=True, origins=["http://localhost:5173"])
     db.init_app(app)
     mail.init_app(app)
     login_manager.init_app(app)
