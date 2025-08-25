@@ -329,8 +329,8 @@ def cadastrar_cliente():
     payload  = get_jwt()
     if not payload:
         return jsonify({"msg": "Usuário não autenticado"}), 401
-    #file = request.files.get('pdf_pedido')
-    file = request.files["arquivo"]
+    file = request.files.get('arquivo')
+    #file = request.files["arquivo"]
     if file:
         #try:
             #Verfica se o cliente existe cadastrando se não exitir
@@ -438,18 +438,21 @@ def cadastrar_cliente():
         # Significa que o cadastro será feito por JSON
         data = request.get_json()
         if not data or not data.get('codigo_externo'):
+            print('Error data/codigo')
             return jsonify({"msg": "Dados inválidos"}), 400
         
         cliente = Cliente.query.filter_by(codigo_externo=data['codigo_externo']).first()
         if cliente:
+            print('Error cliente já exiSte')
+            
             return jsonify({"msg": "Cliente já existe", "codigo_cliente": cliente.codigo_externo}), 400
 
         novo_cliente = Cliente(
             codigo_externo = data['codigo_externo'],
             nome = data['nome'],
-            email=data['email'],
+            email=data['email'] if data['email'] else None,
             telefone_cadastro = data['tell_cadastro'],
-            telefone_motorista  = data['tell_motorista'],
+            telefone_motorista  = data['tell_motorista']  if data['tell_motorista'] else None,
             usuario_id = payload['id'] 
         )
 
