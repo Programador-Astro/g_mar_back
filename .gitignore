@@ -76,3 +76,35 @@ docker-compose.yml.local
 # Arquivos de cache de sistema operacional
 .DS_Store
 Thumbs.db
+
+# Arquivos de cache e temporários do Python
+__pycache__/
+*.pyc
+*.pyo
+*~
+.pytest_cache/
+
+# Arquivos de ambiente virtual
+.venv
+/venv/
+env/
+
+# Arquivos específicos do VS Code
+.vscode/
+
+# Arquivos de log e de banco de dados
+*.log
+*.db
+/database.sqlite
+
+# Variáveis de ambiente
+.env
+
+# Arquivos de upload ou gerados dinamicamente
+# Você pode adicionar os nomes dos arquivos PDF de teste aqui para não ir pro git
+davi_usar.pdf
+/uploads/
+
+# Arquivos de sistema operacional
+.DS_Store
+Thumbs.db

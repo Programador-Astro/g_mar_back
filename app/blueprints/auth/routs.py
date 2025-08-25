@@ -7,23 +7,28 @@ from app import db
 from app.models import *
 
 
-@auth_bp.route('/', methods=['POST'])
+@auth_bp.route('/login', methods=['POST'])
 def root():
-    data = request.get_json()
-    usuario  = Usuario.query.filter_by(email= data['email']).first()
-    if not usuario:
-        return 'USER NOT FOUND', 404
-    if not check_password_hash(usuario.pwd, data['pwd']):
-        return 'INVALID PASSWORD', 401
-    access_token = create_access_token(identity=data['email'], additional_claims={"perfil": usuario.perfil.nome, "id": usuario.id})
-    usuario.jwt = access_token
-    usuario.jwt_iat = get_jti(access_token)
-   
-    db.session.add(usuario)
-    login_user(usuario)
-    db.session.commit()
+    try:
+        data = request.get_json()
+        msg = ''
+        usuario  = Usuario.query.filter_by(email= data['email']).first()
+        if not usuario:
+            return jsonify({"msg": 'USUARIO OU SENHA INCORRETA'}), 404
+        if not check_password_hash(usuario.pwd, data['pwd']):
+            return jsonify({"msg":'USUARIO OU SENHA INCORRETA'}), 401
+        access_token = create_access_token(identity=data['email'], additional_claims={"perfil": usuario.perfil.nome, "id": usuario.id})
+        usuario.jwt = access_token
+        usuario.jwt_iat = get_jti(access_token)
     
-    return jsonify(access_token=access_token, current=current_user.id)
+        db.session.add(usuario)
+        login_user(usuario)
+        db.session.commit()
+        
+        return jsonify(access_token=access_token, current=current_user.id)
+    except Exception as e:
+        print(f"Erro ao cadastrar cliente: {e}")
+        return jsonify({"msg": "Erro ao cadastrar cliente"}), 500
 
 
 
@@ -53,7 +58,11 @@ def register():
     if Usuario.query.filter_by(email=data['email']).first():
         return jsonify({"msg": "Usuário já existe"}), 400
     hashed_password = generate_password_hash(data['pwd'])
-    new_perfil = Perfil(nome=data['nome'], sobrenome=data['sobrenome'], tell=data['tell'], cargo=data['cargo'], setor=data['setor'], cnh=data['cnh'])
+    
+    if not data.get('cnh'):
+        new_perfil = Perfil(nome=data['nome'], sobrenome=data['sobrenome'], tell=data['tell'], cargo=data['cargo'], setor=data['setor'])
+    else:
+        new_perfil = Perfil(nome=data['nome'], sobrenome=data['sobrenome'], tell=data['tell'], cargo=data['cargo'], setor=data['setor'], cnh=data['cnh'])
     db.session.add(new_perfil)
     db.session.flush()
 

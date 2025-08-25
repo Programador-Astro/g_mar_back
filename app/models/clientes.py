@@ -1,5 +1,6 @@
 from app import db
 
+#ESTÁ SENDO POSSIVEL CADASTRAR 2 VEZES O CLIENTE
 class Cliente(db.Model):
     __tablename__ = 'clientes'  
 
@@ -24,11 +25,16 @@ class Endereco_Adm(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     cliente_id = db.Column(db.Integer, db.ForeignKey('clientes.id'), nullable=False)
     endereco = db.Column(db.String(100), nullable=False)
+    bairro = db.Column(db.String(100), nullable=False)
+    cidade = db.Column(db.String(100), nullable=False)
     latitude = db.Column(db.Float, nullable=False)
     longitude = db.Column(db.Float, nullable=False)
     numero = db.Column(db.String(10), nullable=False)
     ponto_ref = db.Column(db.String(100), nullable=True)
     obs = db.Column(db.String(100), nullable=True)
+    
+    def to_dict(self):
+        return {col.name: getattr(self, col.name) for col in self.__table__.columns}
 
 class Endereco_Motorista(db.Model):
     __tablename__ = 'enderecos_motoristas'
@@ -36,11 +42,17 @@ class Endereco_Motorista(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     cliente_id = db.Column(db.Integer, db.ForeignKey('clientes.id'), nullable=False)
     endereco = db.Column(db.String(100), nullable=False)
+    bairro = db.Column(db.String(100), nullable=False)
+    cidade = db.Column(db.String(100), nullable=False)
     latitude = db.Column(db.Float, nullable=False)
     longitude = db.Column(db.Float, nullable=False)
     numero = db.Column(db.String(10), nullable=False)
     ponto_ref = db.Column(db.String(100), nullable=True)
     obs = db.Column(db.String(100), nullable=True)
+
+    
+    def to_dict(self):
+        return {col.name: getattr(self, col.name) for col in self.__table__.columns}
 
 
 class Pedido(db.Model):
@@ -63,6 +75,10 @@ class Pedido(db.Model):
 
     produtos = db.relationship('Produto_Pedido', backref='pedido', lazy=True)
 
+
+    def to_dict(self):
+        return {col.name: getattr(self, col.name) for col in self.__table__.columns}
+
 class Produto_Pedido(db.Model):
     __tablename__ = 'produtos_pedidos'
 
@@ -73,6 +89,8 @@ class Produto_Pedido(db.Model):
 
     produto = db.relationship('Produto', backref='produtos_pedidos')
 
+    def to_dict(self):
+        return {col.name: getattr(self, col.name) for col in self.__table__.columns}
 
 class Produto(db.Model):
     
@@ -87,4 +105,7 @@ class Produto(db.Model):
     preco = db.Column(db.Float, nullable=False)
     #descricao = db.Column(db.String(255), nullable=True)
     peso = db.Column(db.Float, nullable=True)
+
+    def to_dict(self):
+        return {col.name: getattr(self, col.name) for col in self.__table__.columns}
 

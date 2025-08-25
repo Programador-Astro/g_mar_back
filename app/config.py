@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 import os
-
+from datetime import timedelta
 load_dotenv()
 
 class Config:
@@ -14,7 +14,7 @@ class Config:
     MAIL_PASSWORD = os.getenv('ENVIO_EMAIL_SENHA')
     MAIL_USE_TLS = os.getenv('ENVIO_EMAIL_TLS', 'True').lower() in ['true', '1', 'yes']
     MAIL_USE_SSL = os.getenv('ENVIO_EMAIL_SSL', 'False').lower() in ['true', '1', 'yes']
-
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(minutes=30)
 
 class DevelopmentConfig(Config):
     DEBUG = True

@@ -1,5 +1,5 @@
-from app.utils import geocodificar_google
+from app.utils import limpar_pdf_pedido
 
-g = geocodificar_google("Av. Paulista, 1000, São Paulo, SP")
+pedido = limpar_pdf_pedido('davi_usar.pdf')
 
-print(g)
+print(pedido)

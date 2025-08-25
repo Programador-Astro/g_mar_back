@@ -5,67 +5,73 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-def limpar_pdf_pedido(pdf_file):
 
+def limpar_pdf_pedido(pdf_file):
     try:
         pdf_bytes = pdf_file.read()
         pdf_stream = BytesIO(pdf_bytes)
         doc = fitz.open(stream=pdf_stream, filetype="pdf")
-        text = ""
+
+        # Extrai todo o texto do PDF
+        texto = ""
         for page in doc:
-            text += page.get_text()
+            texto += page.get_text("text")  # extração mais precisa
         doc.close()
 
-        # Extração dos dados
-        codigo_pedido_match = re.search(r"Nº Pedido:\s*(\d+)", text)
-        cliente_match = re.search(r"\nCliente:\s*(.+)", text)
-        cod_cliente_match = re.search(r"Cod\.Cliente:\s*(\d+)", text)
-        endereco_match = re.search(r"Endereço:\s*(.+)", text)
-        bairro_match = re.search(r"Bairro:\s*(.+)", text)
-        cidade_match = re.search(r"Cidade:\s*(.+)", text)
-        uf_match = re.search(r"UF:\s*([A-Z]{2})", text)
-        produtos_e_qtds = re.findall(r"(\d+)\s+DG\s+--\s+(.+?)\s+--\s+CX 10L\s+CX 10L\s+(\d+,\d+)", text)
-
-        # Limpeza dos dados
-        codigo_pedido = codigo_pedido_match.group(1) if codigo_pedido_match else "Não encontrado"
-        cliente = limpar_texto(cliente_match.group(1)) if cliente_match else "Não encontrado"
-        cod_cliente = cod_cliente_match.group(1) if cod_cliente_match else "Não encontrado"
-        endereco = limpar_texto(endereco_match.group(1)) if endereco_match else "Não encontrado"
-        bairro = limpar_texto(bairro_match.group(1)) if bairro_match else "Não encontrado"
-        cidade = limpar_texto(cidade_match.group(1)) if cidade_match else "Não encontrado"
-        uf = uf_match.group(1) if uf_match else "Não encontrado"
-        return {
-            "codigo_pedido": codigo_pedido,
-            "cliente": cliente,
-            "cod_cliente": cod_cliente,
-            "endereco": endereco,
-            "bairro": bairro,
-            "cidade": cidade,
-            "uf": uf,
-            "produtos": [
-                {"codigo":codigo, "produto": limpar_texto(produto), "quantidade": quantidade.replace(',', '.')}
-                for codigo, produto, quantidade in produtos_e_qtds
-            ]
+        # Expressões regulares para os campos
+        patterns = {
+            "codigo_pedido": r"Nº Pedido:\s*(\d+)",
+            "cliente": r"\nCliente:\s*(.+)",
+            "cod_cliente": r"Cod\.Cliente:\s*(\d+)",
+            "endereco": r"Endereço:\s*(.+)",
+            "bairro": r"Bairro:\s*(.+)",
+            "cidade": r"Cidade:\s*(.+)",
+            "uf": r"UF:\s*([A-Z]{2})",
         }
 
-    
-    except: 
-        return ({"msg": "Erro ao processar o PDF"})
+        # Busca dos dados principais
+        dados_extraidos = {}
+        for chave, regex in patterns.items():
+            match = re.search(regex, texto)
+            dados_extraidos[chave] = limpar_texto(match.group(1)) if match else "Não encontrado"
+
+        # Extração de produtos (ajustável conforme o PDF real)
+        produtos_e_qtds = re.findall(
+            r"(\d+)\s+DG\s+--\s+(.+?)\s+--\s+CX\s+10L\s+CX\s+10L\s+(\d+,\d+)", texto
+        )
+
+        produtos = []
+        for codigo, produto, quantidade in produtos_e_qtds:
+            produtos.append({
+                "codigo": codigo,
+                "produto": limpar_texto(produto),
+                "quantidade": quantidade.replace(',', '.')
+            })
+
+        # Resultado final
+        return {
+            **dados_extraidos,
+            "produtos": produtos
+        }
+
+    except Exception as e:
+        return {"msg": "Erro ao processar o PDF", "error": str(e)}
 
 def limpar_texto(texto):
-        if not texto:
-            return ""
-        texto = texto.strip()
-        texto = re.sub(r'[\r\n]+', ' ', texto)  # Remove quebras de linha
-        texto = re.sub(r'/[A-Za-z]?$', '', texto)  # Remove / ou /(letra) no final
-        texto = re.sub(r'\s+', ' ', texto)  # Normaliza espaços
-        return texto.strip()
+    if not texto:
+        return ""
+    texto = texto.strip()
+    texto = re.sub(r'[\r\n]+', ' ', texto)  # Remove quebras de linha
+    texto = re.sub(r'\s+/\w*$', '', texto)  # Remove "/X" no final de linhas
+    texto = re.sub(r'\s+', ' ', texto)      # Normaliza múltiplos espaços
+    return texto
 
 
 
-def geocodificar_google(endereco):
+def geocodificar_google(endereco, estado, cidade):
     print(f"🔎 Geocodificando: {endereco}")
     try:
+        geocodificar = f"{endereco}, {estado}, {cidade}"
         API_KEY = os.getenv('GOOGLE_KEY')
         # Cria o cliente do Google Maps
         gmaps = googlemaps.Client(key=API_KEY)
@@ -73,7 +79,10 @@ def geocodificar_google(endereco):
         # Limite de queries por segundo (QPS)
         QPS = int(os.getenv('QPS', 5))
         WAIT_TIME = 1 / QPS
-        resultado = gmaps.geocode(endereco)
+        if endereco and estado and cidade:
+            resultado = gmaps.geocode(geocodificar)
+        else:
+            resultado = gmaps.geocode(endereco)
         time.sleep(WAIT_TIME)  # Controla o rate limit
         if resultado:
             location = resultado[0]["geometry"]["location"]

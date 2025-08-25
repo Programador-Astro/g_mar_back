@@ -14,7 +14,7 @@ UPLOAD_FOLDER = os.path.join(os.getcwd(), 'app', 'static', 'uploads')
 
 @logistica_bp.route('/', methods=['GET'])
 def root():
-    return f'{current_user.id}'
+    return f'OK'
 
 
 @logistica_bp.route('/veiculos', methods=['GET', 'POST'])
@@ -181,28 +181,75 @@ def get_img(id):
 def get_pedidos():
     pedidos = Pedido.query.all()
     pedidos_list = []
+    try:
+        for pedido in pedidos:
+            pedidos_list.append({
+                "id": pedido.id,
+                "cod_externo": pedido.cod_externo,
+                "cliente_id": pedido.cliente_id,
+                "status": pedido.status,
+                "data_criacao": pedido.data_criacao.strftime('%d-%m-%Y %H:%M:%S'),
+                "data_entrega": pedido.data_entrega.strftime('%d-%m-%Y %H:%M:%S') if pedido.data_entrega else None,
+                "endereco_adm": pedido.endereco_adm.endereco if pedido.endereco_adm else None,
+                "bairro":  pedido.endereco_adm.bairro if pedido.endereco_adm.bairro else None,
+                "cidade":  pedido.endereco_adm.cidade if pedido.endereco_adm.cidade else None,
+                "endereco_motorista": pedido.endereco_motorista.endereco if pedido.endereco_motorista else None,
+                "cliente": pedido.cliente.nome if pedido.cliente else None,
+                "motorista": pedido.motorista.nome if pedido.motorista else None,
+                "produtos": [
+                    {
+                        "nome": pp.produto.nome,
+                        "quantidade": pp.quantidade
+                    }
+                    for pp in pedido.produtos
+                ]
+            })
+        return jsonify(pedidos_list), 200
+    except Exception as e:
+        print(f"Erro ao cadastrar cliente: {e}")
+        return jsonify({"msg": "Erro ao buscar   os pedidos"}), 500
 
-    for pedido in pedidos:
-        pedidos_list.append({
-            "id": pedido.id,
-            "cod_externo": pedido.cod_externo,
-            "cliente_id": pedido.cliente_id,
-            "status": pedido.status,
-            "data_criacao": pedido.data_criacao.strftime('%d-%m-%Y %H:%M:%S'),
-            "data_entrega": pedido.data_entrega.strftime('%d-%m-%Y %H:%M:%S') if pedido.data_entrega else None,
-            "endereco_adm": pedido.endereco_adm.endereco if pedido.endereco_adm else None,
-            "endereco_motorista": pedido.endereco_motorista.endereco if pedido.endereco_motorista else None,
-            "cliente": pedido.cliente.nome if pedido.cliente else None,
-            "motorista": pedido.motorista.nome if pedido.motorista else None,
-            "produtos": [
-                {
-                    "nome": pp.produto.nome,
-                    "quantidade": pp.quantidade
-                }
-                for pp in pedido.produtos_pedidos
-            ]
-        })
-    return jsonify(pedidos_list), 200
+@logistica_bp.route('/get_pedido/<cod_externo>', methods=['GET'])
+@jwt_required()
+def get_pedido(cod_externo):
+    try:
+        pedido = Pedido.query.filter_by(cod_externo=cod_externo).first()
+
+        if not pedido:
+            return jsonify({"msg": "Pedido não encontrado"}), 404
+
+        # Dados do pedido
+        pedido_dict = pedido.to_dict()
+
+        # Dados do cliente
+        cliente_dict = pedido.cliente.to_dict() if pedido.cliente else None
+
+        # Endereços
+        endereco_adm_dict = pedido.endereco_adm.to_dict() if pedido.endereco_adm else None
+        endereco_motorista_dict = pedido.endereco_motorista.to_dict() if pedido.endereco_motorista else None
+
+        # Produtos do pedido
+        produtos_list = []
+        for pp in pedido.produtos:
+            produto_dict = pp.produto.to_dict()
+            produto_dict["quantidade"] = pp.quantidade
+            produtos_list.append(produto_dict)
+
+        response = {
+            "pedido": pedido_dict,
+            "cliente": cliente_dict,
+            "endereco_adm": endereco_adm_dict,
+            "endereco_motorista": endereco_motorista_dict,
+            "produtos": produtos_list
+        }
+
+        return jsonify(response), 200
+
+    except Exception as e:
+        print("Erro ao buscar pedido:", e)
+        return jsonify({"msg": "Erro ao buscar o pedido"}), 500
+
+
 @logistica_bp.route('/get_clientes')
 def get_clientes():
     clientes = Cliente.query.all()
@@ -281,33 +328,48 @@ def cadastrar_cliente():
     if not payload:
         return jsonify({"msg": "Usuário não autenticado"}), 401
     file = request.files.get('pdf_pedido')
+
     if file:
-        try:
+        #try:
             #Verfica se o cliente existe cadastrando se não exitir
             dados_pedido = limpar_pdf_pedido(file)
             if not dados_pedido:
                 return jsonify({"msg": "Erro ao processar os dados do pedido (169)"}), 400
             #se exitir e o endereço for outro adciona o novo endereço 
+            # Verifica se o cliente já existe
             cliente = Cliente.query.filter_by(codigo_externo=dados_pedido['cod_cliente']).first()
+
             if cliente:
-                endereco_cliente = Endereco_Adm.query.filter_by(cliente_id=cliente.id, endereco=dados_pedido['endereco']).first()
+                endereco_cliente = Endereco_Adm.query.filter_by(
+                    cliente_id=cliente.id,
+                    endereco=dados_pedido['endereco']
+                ).first()
+
                 if not endereco_cliente:
-                    # Geocodificando o endereço
+                    # Geocodifica o endereço
                     lat, lng = geocodificar_google(dados_pedido['endereco'])
+
+                    # Sanity check: garante que nenhum campo obrigatório é None
+                    bairro = dados_pedido.get('bairro') or 'Desconhecido'
+                    cidade = dados_pedido.get('cidade') or 'Desconhecida'
+
                     novo_endereco = Endereco_Adm(
                         cliente_id=cliente.id,
                         endereco=dados_pedido['endereco'],
-                        latitude=lat,  
-                        longitude=lng, 
+                        latitude=lat,
+                        longitude=lng,
                         numero=dados_pedido.get('numero', ''),
-                        ponto_ref=dados_pedido.get('ponto_ref', ''),
-                        obs=dados_pedido.get('obs', '')
+                        ponto_ref=dados_pedido.get('ponto_ref', ''),  # corrigido aqui
+                        obs=dados_pedido.get('obs', ''),
+                        cidade=cidade,
+                        bairro=bairro
                     )
+
                     db.session.add(novo_endereco)
                     db.session.flush()
                     db.session.commit()
                 else:
-                    print({"msg": "Cliente ja existe e Endereço já cadastrado para este cliente"}), 400
+                    return jsonify({"msg": "Cliente ja existe e Endereço já cadastrado para este cliente"}), 400
             # Se o cliente não existir, cria um novo
             if not cliente:
                 
@@ -318,6 +380,8 @@ def cadastrar_cliente():
                         email=dados_pedido.get('email', None),
                         telefone_cadastro=dados_pedido.get('telefone_cadastro', None),
                         telefone_motorista=dados_pedido.get('telefone_motorista', None),
+
+
                         #current_user.id
                         usuario_id=payload['id']
                     )
@@ -334,6 +398,10 @@ def cadastrar_cliente():
                 try:    
                     endereco_extiste = Endereco_Adm.query.filter_by(endereco=dados_pedido['endereco']).first()
                     if not endereco_extiste:
+                                                # Sanity check: garante que nenhum campo obrigatório é None
+                        bairro = dados_pedido.get('bairro') or 'Desconhecido'
+                        cidade = dados_pedido.get('cidade') or 'Desconhecida'
+
                         lat, lng = geocodificar_google(dados_pedido['endereco'])
                         novo_endereco = Endereco_Adm(
                             cliente_id= cliente.id,
@@ -342,13 +410,16 @@ def cadastrar_cliente():
                             longitude=lng, 
                             numero=dados_pedido.get('numero', ''),
                             ponto_ref=dados_pedido.get('ponto_ref', ''),
-                            obs=dados_pedido.get('obs', '')
+                            obs=dados_pedido.get('obs', ''),
+                            bairro=bairro,
+                            cidade=cidade
                         )
                         db.session.add(novo_endereco)
                         db.session.flush()
                         
                     
                 except Exception as e:
+                    
                     print(f"Erro ao geocodificar o endereço: {e}")
                     return jsonify({"msg": "Erro ao geocodificar o endereço"}), 500
 
@@ -358,9 +429,9 @@ def cadastrar_cliente():
 
             return jsonify({"msg": "Pedido cadastrado com sucesso"}), 201
             
-        except Exception as e:
-            print(f"Erro ao procsessar o PDF: {e}")
-            return jsonify({"msg": "Erro ao processar o PDF"}), 500
+        #except Exception as e:
+        #    print(f"Erro ao procsessar o PDF: {e}")
+        #    return jsonify({"msg": "Erro ao processar o PDF"}), 500
     else:
         # Significa que o cadastro será feito por JSON
         data = request.get_json()
@@ -391,7 +462,10 @@ def cadastrar_cliente():
                 longitude = lng,
                 numero = data['numero'],
                 ponto_ref = data['ponto_ref'],
-                obs = data['obs']
+                obs = data['obs'],
+                bairro = data['bairro'],
+                cidade = data['cidade']
+                
         )
         db.session.add(endereco_nota)
         if data['endereco_motorista']:
@@ -403,15 +477,20 @@ def cadastrar_cliente():
                 longitude = lng,
                 numero = data['numero_motorista'],
                 ponto_ref = data['ponto_ref_motorista'],
-                obs = data['obs_motorista']
+                obs = data['obs_motorista'],
+                bairro = data['bairro'],
+                cidade = data['cidade']
             )
             db.session.add(endereco_motorista)
         db.session.commit()
         return jsonify({"msg": "Cliente cadastrado com sucesso"}), 200
+    
+
+
 @logistica_bp.route('/cadastrar_pedido', methods=['POST'])
 def cadastrar_pedido():
     
-    file = request.files.get('pdf_pedido')
+    file = request.files.get('arquivo')
     if file:
     
             dados_pedido = limpar_pdf_pedido(file)
@@ -424,20 +503,20 @@ def cadastrar_pedido():
             pedido = Pedido.query.filter_by(cod_externo=dados_pedido['codigo_pedido']).first()
             if pedido:
                 return jsonify({"msg": "Pedido já cadastrado"}), 400
-            
-            endereco = int(request.form.get('endereco_adm'))
-            
+            end = Endereco_Adm.query.filter_by(cliente_id=cliente.id).first()
+            #return f"{end.id}"
             novo_pedido = Pedido(
                 cod_externo=dados_pedido['codigo_pedido'],
                 cliente_id=cliente.id,
                 status='Pendente',
                 data_criacao=get_agora(),
                 data_entrega=None,
-                endereco_adm_id=endereco,  
-                endereco_motorista_id=int(request.form.get('endereco_motorista')) if request.form.get('endereco_motorista') else None     
+                endereco_adm_id=end.id
+                #endereco_motorista_id=end.id #int(request.form.get('endereco_motorista')) if request.form.get('endereco_motorista') else None     
             )
-            db.session.add(novo_pedido)
             db.session.flush()
+
+            db.session.add(novo_pedido)
 
             #ESTUDAR MELHOR MANEIRA DE FAZER ISSO PARA CONSUMIER MENOS
             for produto in dados_pedido['produtos']:

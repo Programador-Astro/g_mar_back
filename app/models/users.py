@@ -29,6 +29,6 @@ class Perfil(db.Model):
     tell        = db.Column('tell', db.VARCHAR(20), unique=True)
     setor       = db.Column('setor', db.VARCHAR(50))
     cargo       = db.Column('cargo', db.VARCHAR(50))
-    cnh         = db.Column('cnh', db.VARCHAR(20), unique=True) 
+    cnh         = db.Column('cnh', db.VARCHAR(20), unique=True, nullable=True) 
     usuarios = db.relationship('Usuario', backref='perfil', lazy=True)
    
