@@ -252,15 +252,17 @@ def get_pedido(cod_externo):
 
 @logistica_bp.route('/get_clientes')
 def get_clientes():
-    clientes = Cliente.query.all()
+    try:
+        clientes = Cliente.query.all()
 
-    if not clientes:
-        return jsonify({"erro": "Não foi possível carregar os clientes"}), 404
+        if not clientes:
+            return jsonify({"msg": "Nehum cliente encontrado"}), 401
 
-    dados = [cliente.to_dict() for cliente in clientes]
+        dados = [cliente.to_dict() for cliente in clientes]
 
-    return jsonify({"dados": dados})
-
+        return jsonify({"dados": dados})
+    except:
+        return jsonify({'msg': 'algo deu errado'}), 401
 
 @logistica_bp.route('/get_cliente/<codigo_cliente>', methods=['GET'])
 @jwt_required()
@@ -327,8 +329,8 @@ def cadastrar_cliente():
     payload  = get_jwt()
     if not payload:
         return jsonify({"msg": "Usuário não autenticado"}), 401
-    file = request.files.get('pdf_pedido')
-
+    #file = request.files.get('pdf_pedido')
+    file = request.files["arquivo"]
     if file:
         #try:
             #Verfica se o cliente existe cadastrando se não exitir
@@ -346,12 +348,12 @@ def cadastrar_cliente():
                 ).first()
 
                 if not endereco_cliente:
-                    # Geocodifica o endereço
-                    lat, lng = geocodificar_google(dados_pedido['endereco'])
 
                     # Sanity check: garante que nenhum campo obrigatório é None
-                    bairro = dados_pedido.get('bairro') or 'Desconhecido'
-                    cidade = dados_pedido.get('cidade') or 'Desconhecida'
+                    bairro = dados_pedido.get('bairro') or ''
+                    cidade = dados_pedido.get('cidade') or ''
+                    # Geocodifica o endereço
+                    lat, lng = geocodificar_google(dados_pedido['endereco'], bairro=bairro, cidade=cidade)
 
                     novo_endereco = Endereco_Adm(
                         cliente_id=cliente.id,

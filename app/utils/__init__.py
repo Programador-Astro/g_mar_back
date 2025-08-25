@@ -68,7 +68,7 @@ def limpar_texto(texto):
 
 
 
-def geocodificar_google(endereco, estado, cidade):
+def geocodificar_google(endereco, estado=None, cidade=None):
     print(f"🔎 Geocodificando: {endereco}")
     try:
         geocodificar = f"{endereco}, {estado}, {cidade}"
