@@ -250,7 +250,9 @@ def get_pedido(cod_externo):
         return jsonify({"msg": "Erro ao buscar o pedido"}), 500
 
 
+
 @logistica_bp.route('/get_clientes')
+@jwt_required()
 def get_clientes():
     try:
         clientes = Cliente.query.all()
@@ -557,9 +559,9 @@ def cadastrar_pedido():
             return jsonify(dados_pedido), 200
         
 
-@logistica_bp.route('/cadastrar_endeco_motorista', methods=['POST', 'PUT'])
+@logistica_bp.route('/cadastrar_endereco_motorista', methods=['POST', 'PUT'])
 @jwt_required()
-def cadastrar_endeco_motorista():
+def cadastrar_endereco_motorista():
     data = request.get_json() #CODIGO_CLIENTE, ENDERECO
 
     if request.method == 'POST':
@@ -591,6 +593,7 @@ def cadastrar():
     payload = get_jwt()
     pwd = generate_password_hash(data['pwd'])
 """
+
     novo_perfil = Perfil(
         nome = data['nome'],
         sobrenome = data['sobrenome'],
@@ -606,3 +609,11 @@ def cadastrar():
         autor = payload['id']
         perfil_id = novo_perfil.id
     )"""
+
+
+@logistica_bp.route('/update_cliente/<codigo_externo>')
+@jwt_required()
+def update_cliente(codigo_externo):
+    dados = request.get_json()
+    print(dados)
+    return jsonify({'msg':f'Dados recebidos ({dados})'})
