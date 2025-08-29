@@ -41,7 +41,7 @@ def limpar_pdf_pedido(pdf_file):
 
         # Extração de produtos (ajustável conforme o PDF real)
         produtos_e_qtds = re.findall(
-            r"(\d+)\s+DG\s+--\s+(.+?)\s+--\s+CX\s+10L\s+CX\s+10L\s+(\d+,\d+)", texto
+            r"(\d+)\s+(DG|SMO|AG|NTZ|A73)\s+--\s+(.+?)\s+--\s+CX\s+10L\s+CX\s+10L\s+(\d+,\d+)", texto
         )
 
         produtos = []
