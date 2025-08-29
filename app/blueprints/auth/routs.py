@@ -1,6 +1,6 @@
 from . import auth_bp
 from werkzeug.security import generate_password_hash, check_password_hash
-from flask import request, jsonify
+from flask import request, jsonify, session
 from flask_login import login_user, logout_user, current_user
 from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required, get_jwt, get_jti
 from app import db
@@ -17,18 +17,20 @@ def root():
             return jsonify({"msg": 'USUARIO OU SENHA INCORRETA'}), 404
         if not check_password_hash(usuario.pwd, data['pwd']):
             return jsonify({"msg":'USUARIO OU SENHA INCORRETA'}), 401
-        access_token = create_access_token(identity=data['email'], additional_claims={"perfil": usuario.perfil.nome, "id": usuario.id})
+        setor = usuario.perfil.setor
+        access_token = create_access_token(identity=data['email'], additional_claims={"perfil": usuario.perfil.nome, "id": usuario.id, "setor": usuario.perfil.setor})
         usuario.jwt = access_token
         usuario.jwt_iat = get_jti(access_token)
     
         db.session.add(usuario)
         login_user(usuario)
+        session['id_user'] = usuario.id
         db.session.commit()
         
-        return jsonify(access_token=access_token, current=current_user.id)
+        return jsonify(access_token=access_token, setor=setor)
     except Exception as e:
-        print(f"Erro ao cadastrar cliente: {e}")
-        return jsonify({"msg": "Erro ao cadastrar cliente"}), 500
+        print(f"Erro: {e}")
+        return jsonify({"msg": f"Erro : {e}"}), 500
 
 
 

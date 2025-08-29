@@ -57,6 +57,7 @@ class Endereco_Motorista(db.Model):
 
 class Pedido(db.Model):
     __tablename__ = 'pedidos'
+    
     id = db.Column(db.Integer, primary_key=True)
     cod_externo = db.Column(db.String(50), unique=True, nullable=False)
     cliente_id = db.Column(db.Integer, db.ForeignKey('clientes.id'), nullable=False)
@@ -67,14 +68,19 @@ class Pedido(db.Model):
     endereco_adm_id = db.Column(db.Integer, db.ForeignKey('enderecos_adm.id'), nullable=False)
     endereco_motorista_id = db.Column(db.Integer, db.ForeignKey('enderecos_motoristas.id'), nullable=True)
     motorista_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    vendendor_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
 
     cliente = db.relationship('Cliente', backref='pedidos')
     endereco_adm = db.relationship('Endereco_Adm', backref='pedidos')
     endereco_motorista = db.relationship('Endereco_Motorista', backref='pedidos')
-    motorista = db.relationship('Usuario', backref='pedidos', lazy=True)
-
+    
+    # Especificando qual chave estrangeira usar para o relacionamento com 'Usuario'
+    motorista = db.relationship('Usuario', backref='pedidos_motorista', 
+                                foreign_keys=[motorista_id], lazy=True)
+    vendendor = db.relationship('Usuario', backref='pedidos_vendedor', 
+                                foreign_keys=[vendendor_id], lazy=True)
+    
     produtos = db.relationship('Produto_Pedido', backref='pedido', lazy=True)
-
 
     def to_dict(self):
         return {col.name: getattr(self, col.name) for col in self.__table__.columns}

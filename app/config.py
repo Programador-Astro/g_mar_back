@@ -6,6 +6,10 @@ load_dotenv()
 class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SECRET_KEY = os.getenv('SECRET_KEY', 'default-secret')
+    SESSION_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True 
+    PERMANENT_SESSION_LIFETIME = timedelta(minutes=30)
+
     CORS_HEADERS = 'Content-Type'
     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY')
     MAIL_SERVER = os.getenv('ENVIO_EMAIL_SERVER')

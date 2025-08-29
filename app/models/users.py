@@ -27,8 +27,8 @@ class Perfil(db.Model):
     nome        = db.Column('nome', db.VARCHAR(15), nullable=False)
     sobrenome   = db.Column('sobrenome', db.VARCHAR(100), nullable=False)
     tell        = db.Column('tell', db.VARCHAR(20), unique=True)
-    setor       = db.Column('setor', db.VARCHAR(50))
-    cargo       = db.Column('cargo', db.VARCHAR(50))
+    setor       = db.Column('setor', db.VARCHAR(50), nullable=False)
+    cargo       = db.Column('cargo', db.VARCHAR(50), nullable=True)
     cnh         = db.Column('cnh', db.VARCHAR(20), unique=True, nullable=True) 
     usuarios = db.relationship('Usuario', backref='perfil', lazy=True)
-   
+

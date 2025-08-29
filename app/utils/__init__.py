@@ -2,6 +2,9 @@
 import os, re, fitz, time, googlemaps, datetime, pytz
 from io import BytesIO
 from dotenv import load_dotenv
+from app.models import *
+from functools import wraps
+from flask import request, jsonify, session
 
 load_dotenv()
 
@@ -27,6 +30,7 @@ def limpar_pdf_pedido(pdf_file):
             "bairro": r"Bairro:\s*(.+)",
             "cidade": r"Cidade:\s*(.+)",
             "uf": r"UF:\s*([A-Z]{2})",
+            "vendendor": r"RCA:s*(.+)",
         }
 
         # Busca dos dados principais
@@ -68,10 +72,15 @@ def limpar_texto(texto):
 
 
 
-def geocodificar_google(endereco, estado=None, cidade=None):
-    print(f"🔎 Geocodificando: {endereco}")
+def geocodificar_google(endereco, bairro=None, cidade=None):
     try:
-        geocodificar = f"{endereco}, {estado}, {cidade}"
+        
+        if cidade != None and bairro != None:
+            print(f"🔎Geocodificando Com cidade e Biarro: {endereco, cidade, bairro}")
+            geocodificar = f"{endereco}, {bairro}, {cidade}"
+        else:
+            print(f"🔎Geocodificando: {endereco}")
+            geocodificar = f"{endereco}"
         API_KEY = os.getenv('GOOGLE_KEY')
         # Cria o cliente do Google Maps
         gmaps = googlemaps.Client(key=API_KEY)
@@ -79,10 +88,9 @@ def geocodificar_google(endereco, estado=None, cidade=None):
         # Limite de queries por segundo (QPS)
         QPS = int(os.getenv('QPS', 5))
         WAIT_TIME = 1 / QPS
-        if endereco and estado and cidade:
-            resultado = gmaps.geocode(geocodificar)
-        else:
-            resultado = gmaps.geocode(endereco)
+        
+        resultado = gmaps.geocode(geocodificar)
+
         time.sleep(WAIT_TIME)  # Controla o rate limit
         if resultado:
             location = resultado[0]["geometry"]["location"]
@@ -97,6 +105,7 @@ def geocodificar_google(endereco, estado=None, cidade=None):
 
 
 def get_agora(estado="Sao_Paulo"):
+
     # Pega a hora do servidor em UTC
     agora_utc = datetime.datetime.now(pytz.utc)
 
@@ -107,3 +116,34 @@ def get_agora(estado="Sao_Paulo"):
 
     # Retorna a hora formatada em JSON
     return agora_brasil.strftime('%Y-%m-%d %H:%M:%S')
+
+
+
+
+
+def verifica_setor(setor_necessario):
+    """
+    Decorador que verifica se o usuário logado tem o setor necessário para acessar a rota.
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # Obtém o ID do usuário a partir da sessão
+            id_user = session.get('id_user')
+
+            if not id_user:
+                return jsonify({"erro": "Usuário não está logado."}), 401
+
+            usuario = Usuario.query.filter_by(id=id_user).first()
+            print(f"Setor esperado: {setor_necessario}")
+            print(f"Setor do usuário: {usuario.perfil.setor}")
+            if not usuario:
+                return jsonify({"erro": "Usuário não encontrado."}), 404
+
+            # Verifica se o setor do usuário é o setor necessário
+            if usuario.perfil.setor != setor_necessario:
+                return jsonify({"erro": "Acesso negado. Setor não autorizado."}), 403
+
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator

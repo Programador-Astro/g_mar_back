@@ -1,182 +1,27 @@
-from . import logistica_bp
-from flask import request, jsonify, render_template, url_for
+from . import comercial_bp
+from flask import request, jsonify, render_template, url_for, session
 from flask_login import current_user, login_required
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jti, get_jwt
 from app.models import *
 from app import db
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash
-from app.utils import limpar_pdf_pedido, geocodificar_google, get_agora
+from app.utils import limpar_pdf_pedido, geocodificar_google, get_agora, verifica_setor
 import os
 
 
 UPLOAD_FOLDER = os.path.join(os.getcwd(), 'app', 'static', 'uploads')
 
-@logistica_bp.route('/', methods=['GET'])
+@comercial_bp.route('/', methods=['GET'])
+@verifica_setor('comercial')
 def root():
-    return f'OK'
+    user = session.get('id_user')
+    return f'{user} OK comercial'
 
 
-@logistica_bp.route('/veiculos', methods=['GET', 'POST'])
-@jwt_required()
-def veiculos():
-
-    if request.method == 'POST':
-        data = request.get_json()
-        if not data or not data.get('placa') or not data.get('modelo'):
-            return jsonify({"msg": "Dados inválidos"}), 400
-        
-        current_user = Usuario.query.filter_by(email=get_jwt_identity()).first()
-        print(current_user.id)
-        new_veiculo = Veiculos(
-            placa=data['placa'],
-            modelo=data['modelo'],
-            ano=data['ano'],
-            capacidade=int(data['capacidade']),
-            km_atual=int(data['km_atual']),
-            autor=int(current_user.id) 
-            )
-        
-        db.session.add(new_veiculo)
-        db.session.commit()
-        return jsonify({"msg": "Veículo adicionado com sucesso"}), 201
-    
-    # Se for um GET, retorna a lista de veículos
-    veiculos = Veiculos.query.all()
-    veiculos_list = []
-    for veiculo in veiculos:
-        veiculos_list.append(veiculo.placa)
-    """ for veiculo in veiculos:
-            veiculos_list.append({
-                'id': veiculo.id,
-                'placa': veiculo.placa,
-                'modelo': veiculo.modelo,
-                'ano': veiculo.ano,
-                'status': veiculo.status,
-                'capacidade': veiculo.capacidade,
-                'km_atual': veiculo.km_atual
-
-            })"""
-    return jsonify(veiculos_list), 200
 
 
-@logistica_bp.route('/checklist/<placa>', methods=['POST', 'GET'])
-@jwt_required()
-def checklist(placa):
-    veiculo = Veiculos.query.filter_by(placa=placa).first()
-    if not veiculo:
-        return jsonify({"error": "Veículo não encontrado"}), 404
-    if request.method == 'POST':
-        new_checklist = Checklist(
-            placa=veiculo.placa,
-            km=int(request.form.get('km')),
-            temperatura=float(request.form.get('temperatura')),
-            combustivel=float(request.form.get('combustivel')),
-            obs=request.form.get('observacoes', ""),  # novo campo
-            autor=1  # substituir pelo usuário autenticado
-        )
-
-        db.session.add(new_checklist)
-        db.session.flush()
-
-        checklist_id = new_checklist.id
-        fotos_salvas = {}
-
-        # Pasta do checklist
-        pasta_checklist = os.path.join(UPLOAD_FOLDER, str(checklist_id))
-        pasta_extras = os.path.join(pasta_checklist, "extras")
-        os.makedirs(pasta_checklist, exist_ok=True)
-        os.makedirs(pasta_extras, exist_ok=True)
-
-        # Fotos padrão
-        for campo in ["fotoFrontal", "fotoTraseira", "fotoLateral1", "fotoLateral2"]:
-            arquivo = request.files.get(campo)
-            if arquivo and arquivo.filename:
-                ext = os.path.splitext(secure_filename(arquivo.filename))[1]
-                filename = f"{campo}{ext}"
-                filepath = os.path.join(pasta_checklist, filename)
-                arquivo.save(filepath)
-
-                if campo == "fotoFrontal":
-                    new_checklist.src_ft_frontal = filepath
-                elif campo == "fotoTraseira":
-                    new_checklist.src_ft_traseira = filepath
-                elif campo == "fotoLateral1":
-                    new_checklist.src_ft_lateral1 = filepath
-                elif campo == "fotoLateral2":
-                    new_checklist.src_ft_lateral2 = filepath
-
-        # Fotos adicionais (não salvamos no banco, só no diretório)
-        for key, arquivo in request.files.items():
-            if key.startswith("fotoAdicional_") and arquivo and arquivo.filename:
-                ext = os.path.splitext(secure_filename(arquivo.filename))[1]
-                filename = f"{key}{ext}"
-                filepath = os.path.join(pasta_extras, filename)
-                arquivo.save(filepath)
-
-        db.session.commit()
-
-        return jsonify({"msg": "Checklist adicionado com sucesso", "id": checklist_id}), 201
-
-    # Se for um GET, retorna a lista de checklists
-    checklists = Checklist.query.all()
-    checklist_list = []
-    for checklist in checklists:
-        if checklist.placa == placa:
-            checklist_list.append({
-                'id': checklist.id,
-                'placa': checklist.placa,
-                'km': checklist.km,
-                'temperatura': checklist.temperatura,
-                'combustivel': checklist.combustivel,
-                'data': checklist.data.strftime('%d-%m-%y %H:%M:%S'),
-                'autor': Usuario.query.get(checklist.autor).perfil.nome
-            })
-    return jsonify(checklist_list), 200
-
-
-@logistica_bp.route("/get_img/<int:id>")
-def get_img(id):
-    checklist = Checklist.query.filter_by(id=id).first()
-
-    if not checklist:
-        return jsonify({"msg": "Checklist not found"}), 404
-
-    fotos = []
-    fotos_extras = []
-    # 1) Fotos padrão do checklist (vindas das colunas src_ft_*)
-    for coluna, valor in checklist.__dict__.items():
-        if coluna.startswith('src_ft_') and valor:
-            filename = os.path.basename(valor)
-            file_url = url_for('static', filename=f'uploads/{id}/{filename}', _external=False)
-            fotos.append({
-                "nome": coluna.replace("src_ft_", ""),
-                "url": file_url
-            })
-
-    # 2) Fotos adicionais na pasta extras
-    extras_dir = os.path.join("app", "static", "uploads", str(id), "extras")
-    if os.path.exists(extras_dir):
-        for file in os.listdir(extras_dir):
-            if file.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp")):
-                file_url = url_for('static', filename=f'uploads/{id}/extras/{file}', _external=False)
-                fotos_extras.append({
-                    "nome": f"extra_{file}",
-                    "url": file_url
-                })
-
-    return jsonify({
-        "id": checklist.id,
-        "data": checklist.data.strftime("%Y-%m-%d") if checklist.data else None,
-        "km": checklist.km,
-        "temperatura": checklist.temperatura,
-        "combustivel": checklist.combustivel,
-        "fotos": fotos,
-        "fotos_extras": fotos_extras
-    }), 200
-
-
-@logistica_bp.route('/get_pedidos', methods=['GET'])
+@comercial_bp.route('/get_pedidos', methods=['GET'])
 @jwt_required()
 def get_pedidos():
     pedidos = Pedido.query.all()
@@ -209,7 +54,7 @@ def get_pedidos():
         print(f"Erro ao cadastrar cliente: {e}")
         return jsonify({"msg": "Erro ao buscar   os pedidos"}), 500
 
-@logistica_bp.route('/get_pedido/<cod_externo>', methods=['GET'])
+@comercial_bp.route('/get_pedido/<cod_externo>', methods=['GET'])
 @jwt_required()
 def get_pedido(cod_externo):
     try:
@@ -251,7 +96,7 @@ def get_pedido(cod_externo):
 
 
 
-@logistica_bp.route('/get_clientes')
+@comercial_bp.route('/get_clientes')
 @jwt_required()
 def get_clientes():
     try:
@@ -266,7 +111,7 @@ def get_clientes():
     except:
         return jsonify({'msg': 'algo deu errado'}), 401
 
-@logistica_bp.route('/get_cliente/<codigo_cliente>', methods=['GET'])
+@comercial_bp.route('/get_cliente/<codigo_cliente>', methods=['GET'])
 @jwt_required()
 def get_cliente(codigo_cliente):
     cliente = Cliente.query.filter_by(codigo_externo=codigo_cliente).first()
@@ -324,7 +169,7 @@ def get_cliente(codigo_cliente):
 
     return jsonify({"dados": cliente_dict}), 200
 
-@logistica_bp.route('/cadastrar_cliente', methods=['POST'])
+@comercial_bp.route('/cadastrar_cliente', methods=['POST'])
 @jwt_required()
 def cadastrar_cliente():
     #current_user = Usuario.query.filter_by(email=get_jwt_identity()).first()
@@ -430,12 +275,7 @@ def cadastrar_cliente():
         db.session.add(novo_cliente)
         db.session.flush()
         if data['endereco_nota']:
-            endereco = data['endereco_nota']
-            bairro = data['bairro'] 
-            cidade = data['cidade']
-
-            lat, lng = geocodificar_google(endereco=endereco, bairro=bairro, cidade=cidade)
-
+            lat, lng = geocodificar_google(data['endereco_nota'])
             endereco_nota = Endereco_Adm(
                 cliente_id = novo_cliente.id,
                 endereco= data['endereco_nota'],
@@ -450,7 +290,7 @@ def cadastrar_cliente():
         )
         db.session.add(endereco_nota)
         if data['endereco_motorista']:
-            lat, lng = geocodificar_google(data['endereco_motorista'], cidade=data['cidade'], bairro=data['bairro'])
+            lat, lng = geocodificar_google(data['endereco_motorista'])
             endereco_motorista = Endereco_Motorista(
                 cliente_id = novo_cliente.id,
                 endereco= data['endereco_motorista'],
@@ -468,7 +308,7 @@ def cadastrar_cliente():
     
 
 
-@logistica_bp.route('/cadastrar_pedido', methods=['POST'])
+@comercial_bp.route('/cadastrar_pedido', methods=['POST'])
 @jwt_required()
 def cadastrar_pedido():
     payload = get_jwt()
@@ -535,14 +375,14 @@ def cadastrar_pedido():
             return jsonify(dados_pedido), 200
         
 
-@logistica_bp.route('/cadastrar_endereco_motorista/<codigo_externo>', methods=['POST', 'PUT'])
+@comercial_bp.route('/cadastrar_endereco_motorista', methods=['POST', 'PUT'])
 @jwt_required()
-def cadastrar_endereco_motorista(codigo_externo):
-    data = request.get_json() 
+def cadastrar_endereco_motorista():
+    data = request.get_json() #CODIGO_CLIENTE, ENDERECO
 
     if request.method == 'POST':
         lat, lng = geocodificar_google(data['endereco'])
-        cliente = Cliente.query.filter_by(codigo_externo=codigo_externo).first()
+        cliente = Cliente.query.filter_by(codigo_externo=data['codigo_externo']).first()
         if not cliente:
             print('cliente não encontrado', data['codigo_externo'], '====================================')
         novo_endereco = Endereco_Motorista(
@@ -550,8 +390,6 @@ def cadastrar_endereco_motorista(codigo_externo):
             endereco= data['endereco'],
             latitude=lat,  
             longitude=lng,
-            bairro= data['bairro'],
-            cidade = data['cidade'],
             numero=data['numero'],
             ponto_ref= data['ponto_ref'],
             obs= data['obs']
@@ -564,7 +402,7 @@ def cadastrar_endereco_motorista(codigo_externo):
         pass
 
 
-@logistica_bp.route('/cadastrar')
+@comercial_bp.route('/cadastrar')
 @jwt_required()
 def cadastrar():
     data = request.get_json()
@@ -589,7 +427,7 @@ def cadastrar():
     )"""
 
 
-@logistica_bp.route('/update_cliente/<codigo_externo>')
+@comercial_bp.route('/update_cliente/<codigo_externo>')
 @jwt_required()
 def update_cliente(codigo_externo):
     dados = request.get_json()
@@ -597,7 +435,7 @@ def update_cliente(codigo_externo):
     return jsonify({'msg':f'Dados recebidos ({dados})'})
 
 
-@logistica_bp.route('/teste', methods=['POST'])
+@comercial_bp.route('/teste', methods=['POST'])
 def teste():
     file = request.files.get('arquivo')
     if not file:
