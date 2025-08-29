@@ -39,18 +39,20 @@ def limpar_pdf_pedido(pdf_file):
             match = re.search(regex, texto)
             dados_extraidos[chave] = limpar_texto(match.group(1)) if match else "Não encontrado"
 
-        # Extração de produtos (ajustável conforme o PDF real)
         produtos_e_qtds = re.findall(
-            r"(\d+)\s+(DG|SMO|MON|AG|NTZ|A73)\s+--\s+(.+?)\s+--\s+CX\s+10L\s+CX\s+10L\s+(\d+,\d+)", texto
+            r"(\d+)\s+(DG|SMO|MON|AG|NTZ|A73)\s+--\s+(.+?)\s+--(?:.*?CX\s*10L\s*)+.*?(\d+,\d+)",
+            texto
         )
-
+        
         produtos = []
-        for codigo, produto, quantidade in produtos_e_qtds:
+        for codigo, sigla, produto, quantidade in produtos_e_qtds:
             produtos.append({
                 "codigo": codigo,
+                "sigla": sigla,
                 "produto": limpar_texto(produto),
                 "quantidade": quantidade.replace(',', '.')
             })
+
 
         # Resultado final
         return {
